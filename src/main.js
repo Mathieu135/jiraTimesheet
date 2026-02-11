@@ -9,7 +9,9 @@ import {
   resumeTimer,
   stopAndLog,
   discardTimer,
+  setTimerElapsed,
   getTimers,
+  getMyWorklogs,
   getConfig,
   saveConfig,
 } from "./jira.js";
@@ -33,10 +35,20 @@ const detailTitle = document.getElementById("detail-title");
 const detailContent = document.getElementById("ticket-detail-content");
 const detailBackBtn = document.getElementById("detail-back-btn");
 const timersList = document.getElementById("timers-list");
+const tabBar = document.getElementById("tab-bar");
+const tabProjets = document.getElementById("tab-projets");
+const tabTimesheet = document.getElementById("tab-timesheet");
+const timesheetTotalValue = document.getElementById("timesheet-total-value");
+const timesheetContent = document.getElementById("timesheet-content");
+const timesheetRefresh = document.getElementById("timesheet-refresh");
 
 let refreshInterval = null;
 let cachedProjects = [];
 let cachedTickets = [];
+let jiraBaseUrl = "";
+let currentTab = "projets";
+let timesheetMode = "today";
+let timesheetLoading = false;
 
 // --- Init ---
 
@@ -51,6 +63,7 @@ async function init() {
 async function loadConfig() {
   try {
     const config = await getConfig();
+    jiraBaseUrl = (config.jira_url || "").replace(/\/+$/, "");
     document.getElementById("jira-url").value = config.jira_url || "";
     document.getElementById("jira-email").value = config.email || "";
     document.getElementById("jira-token").value = config.api_token || "";
@@ -80,6 +93,7 @@ settingsForm.addEventListener("submit", async (e) => {
 
   try {
     await saveConfig(jiraUrl, email, apiToken);
+    jiraBaseUrl = jiraUrl.replace(/\/+$/, "");
     showToast("Settings saved", "success");
     hideSettings();
     await loadProjects();
@@ -216,6 +230,12 @@ ticketsList.addEventListener("click", async (e) => {
 
   const infoEl = e.target.closest("[data-action='show-detail']");
   if (infoEl) {
+    if (e.ctrlKey && jiraBaseUrl) {
+      navigator.clipboard.writeText(`${jiraBaseUrl}/browse/${infoEl.dataset.key}`)
+        .then(() => showToast("URL copiée", "success"))
+        .catch(() => showToast("Erreur copie", "error"));
+      return;
+    }
     await showTicketDetail(infoEl.dataset.key);
   }
 });
@@ -404,6 +424,7 @@ function startRefreshLoop() {
 }
 
 async function refreshTimers() {
+  if (editingTimerId !== null) return;
   try {
     const timers = await getTimers();
     renderTimers(timers);
@@ -435,7 +456,7 @@ function renderTimers(timers) {
         <div class="timer-key">${escapeHtml(t.issue_key)}</div>
         <div class="timer-summary">${escapeHtml(t.summary)}</div>
       </div>
-      <div class="timer-time">${formatTime(t.elapsed_seconds)}</div>
+      <div class="timer-time timer-time-display" data-action="edit-time" data-id="${t.id}" data-seconds="${t.elapsed_seconds}" title="Click to edit">${formatTime(t.elapsed_seconds)}</div>
       <div class="timer-actions">
         ${
           t.paused
@@ -451,12 +472,97 @@ function renderTimers(timers) {
     .join("");
 }
 
+let editingTimerId = null;
+
+function parseTimeInput(str) {
+  const digits = str.trim().replace(/\D/g, "");
+  if (digits.length !== 4) return null;
+  const h = parseInt(digits.slice(0, 2), 10);
+  const m = parseInt(digits.slice(2, 4), 10);
+  if (m >= 60) return null;
+  return h * 3600 + m * 60;
+}
+
+function startEditingTime(el) {
+  const timerId = parseInt(el.dataset.id, 10);
+  if (editingTimerId !== null) return;
+  editingTimerId = timerId;
+
+  // Pause refresh loop to prevent re-render overwriting the input
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
+
+  const totalSeconds = parseInt(el.dataset.seconds, 10);
+  const hh = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "timer-time-input";
+  input.maxLength = 4;
+  input.value = `${hh}${mm}`;
+
+  el.textContent = "";
+  el.appendChild(input);
+  input.focus();
+  input.select();
+
+  function finishEdit(save) {
+    if (editingTimerId !== timerId) return; // Already finished
+    if (save) {
+      const seconds = parseTimeInput(input.value);
+      if (seconds === null) {
+        showToast("4 chiffres requis — HHMM (ex: 0130 = 1h30)", "error");
+        editingTimerId = null;
+        startRefreshLoop();
+        return;
+      }
+      editingTimerId = null; // Clear before async to prevent blur re-entry
+      setTimerElapsed(timerId, seconds)
+        .then(() => startRefreshLoop())
+        .catch((err) => {
+          showToast(err, "error");
+          startRefreshLoop();
+        });
+      return;
+    }
+    // Cancel
+    editingTimerId = null;
+    startRefreshLoop();
+  }
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      finishEdit(true);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      finishEdit(false);
+    }
+  });
+
+  input.addEventListener("blur", () => {
+    // Only cancel if we haven't already committed
+    if (editingTimerId === timerId) {
+      finishEdit(false);
+    }
+  });
+}
+
 timersList.addEventListener("click", async (e) => {
+  // Handle inline time editing
+  const timeDisplay = e.target.closest("[data-action='edit-time']");
+  if (timeDisplay && !timeDisplay.querySelector("input")) {
+    startEditingTime(timeDisplay);
+    return;
+  }
+
   const btn = e.target.closest("[data-action]");
   if (!btn) return;
 
   const action = btn.dataset.action;
-  if (action === "start-ticket") return;
+  if (action === "start-ticket" || action === "edit-time") return;
   const id = parseInt(btn.dataset.id, 10);
 
   try {
@@ -483,6 +589,202 @@ timersList.addEventListener("click", async (e) => {
   } catch (err) {
     showToast(err, "error");
   }
+});
+
+// --- Tabs ---
+
+function switchTab(target) {
+  currentTab = target;
+  tabBar.querySelectorAll(".tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === target);
+  });
+  tabProjets.classList.toggle("hidden", target !== "projets");
+  tabTimesheet.classList.toggle("hidden", target !== "timesheet");
+  if (target === "timesheet") {
+    loadTimesheet();
+  }
+}
+
+tabBar.addEventListener("click", (e) => {
+  const tab = e.target.closest(".tab");
+  if (!tab) return;
+  switchTab(tab.dataset.tab);
+});
+
+// --- Timesheet ---
+
+function getDateRange(mode) {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const today = `${yyyy}-${mm}-${dd}`;
+
+  if (mode === "today") {
+    return { start: today, end: today };
+  }
+
+  // Week: Monday to Sunday
+  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon...
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + mondayOffset);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  const fmt = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  return { start: fmt(monday), end: fmt(sunday) };
+}
+
+async function loadTimesheet() {
+  if (timesheetLoading) return;
+  timesheetLoading = true;
+  timesheetContent.innerHTML = '<div class="loading">Loading worklogs...</div>';
+  timesheetTotalValue.textContent = "...";
+
+  try {
+    const { start, end } = getDateRange(timesheetMode);
+    const entries = await getMyWorklogs(start, end);
+    renderTimesheet(entries);
+  } catch (err) {
+    timesheetContent.innerHTML = `<div class="empty-state">Error: ${escapeHtml(String(err))}</div>`;
+    timesheetTotalValue.textContent = "0:00:00";
+  } finally {
+    timesheetLoading = false;
+  }
+}
+
+function renderTimesheet(entries) {
+  if (entries.length === 0) {
+    timesheetContent.innerHTML = '<div class="empty-state">No worklogs found for this period.</div>';
+    timesheetTotalValue.textContent = "0:00:00";
+    return;
+  }
+
+  const grandTotal = entries.reduce((sum, e) => sum + e.time_spent_seconds, 0);
+  timesheetTotalValue.textContent = formatTime(grandTotal);
+
+  if (timesheetMode === "today") {
+    renderTimesheetToday(entries);
+  } else {
+    renderTimesheetWeek(entries);
+  }
+}
+
+function renderTimesheetToday(entries) {
+  // Aggregate by issue_key
+  const byIssue = new Map();
+  for (const e of entries) {
+    const existing = byIssue.get(e.issue_key);
+    if (existing) {
+      byIssue.set(e.issue_key, {
+        ...existing,
+        time_spent_seconds: existing.time_spent_seconds + e.time_spent_seconds,
+      });
+    } else {
+      byIssue.set(e.issue_key, { ...e });
+    }
+  }
+
+  timesheetContent.innerHTML = Array.from(byIssue.values())
+    .map(
+      (e) => `
+    <div class="ts-entry">
+      <span class="ts-key">${escapeHtml(e.issue_key)}</span>
+      <span class="ts-summary">${escapeHtml(e.summary)}</span>
+      <span class="ts-time">${formatTime(e.time_spent_seconds)}</span>
+    </div>
+  `
+    )
+    .join("");
+}
+
+function renderTimesheetWeek(entries) {
+  // Group by date
+  const byDate = new Map();
+  for (const e of entries) {
+    if (!byDate.has(e.date)) {
+      byDate.set(e.date, []);
+    }
+    byDate.get(e.date).push(e);
+  }
+
+  const sortedDates = Array.from(byDate.keys()).sort();
+
+  timesheetContent.innerHTML = sortedDates
+    .map((date) => {
+      const dayEntries = byDate.get(date);
+      const dayTotal = dayEntries.reduce((sum, e) => sum + e.time_spent_seconds, 0);
+
+      // Aggregate by issue within each day
+      const byIssue = new Map();
+      for (const e of dayEntries) {
+        const existing = byIssue.get(e.issue_key);
+        if (existing) {
+          byIssue.set(e.issue_key, {
+            ...existing,
+            time_spent_seconds: existing.time_spent_seconds + e.time_spent_seconds,
+          });
+        } else {
+          byIssue.set(e.issue_key, { ...e });
+        }
+      }
+
+      const dayLabel = formatDayLabel(date);
+
+      return `
+        <div class="ts-day-group">
+          <div class="ts-day-header">
+            <span class="ts-day-label">${escapeHtml(dayLabel)}</span>
+            <span class="ts-day-total">${formatTime(dayTotal)}</span>
+          </div>
+          ${Array.from(byIssue.values())
+            .map(
+              (e) => `
+            <div class="ts-entry">
+              <span class="ts-key">${escapeHtml(e.issue_key)}</span>
+              <span class="ts-summary">${escapeHtml(e.summary)}</span>
+              <span class="ts-time">${formatTime(e.time_spent_seconds)}</span>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function formatDayLabel(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
+// Mode toggle (Today / Week)
+tabTimesheet.addEventListener("click", (e) => {
+  const modeBtn = e.target.closest(".mode-btn");
+  if (!modeBtn) return;
+  const mode = modeBtn.dataset.mode;
+  if (mode === timesheetMode) return;
+  timesheetMode = mode;
+  tabTimesheet.querySelectorAll(".mode-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.mode === mode);
+  });
+  loadTimesheet();
+});
+
+timesheetRefresh.addEventListener("click", () => {
+  loadTimesheet();
 });
 
 // --- Utils ---

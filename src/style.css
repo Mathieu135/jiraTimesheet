@@ -76,6 +76,184 @@ header h1 {
   background: var(--surface);
 }
 
+/* Tab bar */
+#tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  gap: 0;
+}
+
+.tab {
+  flex: 1;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* Tab content */
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Timesheet */
+.timesheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.mode-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mode-btn {
+  padding: 5px 14px;
+  background: var(--surface);
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mode-btn:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.mode-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.mode-btn.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+#timesheet-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+.timesheet-total-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.timesheet-total-value {
+  font-family: "SF Mono", "Consolas", "Monaco", monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+#timesheet-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.ts-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.ts-key {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  min-width: 70px;
+}
+
+.ts-summary {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ts-time {
+  font-family: "SF Mono", "Consolas", "Monaco", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+  white-space: nowrap;
+}
+
+.ts-day-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.ts-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--surface-hover);
+  border-radius: var(--radius);
+}
+
+.ts-day-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.ts-day-total {
+  font-family: "SF Mono", "Consolas", "Monaco", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 /* Filter input */
 .filter-input {
   width: 100%;
@@ -513,6 +691,32 @@ header h1 {
 .timer-btn.log:hover {
   color: var(--success);
   border-color: var(--success);
+}
+
+.timer-time-display {
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background 0.15s;
+}
+
+.timer-time-display:hover {
+  background: var(--surface-hover);
+}
+
+.timer-time-input {
+  font-family: "SF Mono", "Consolas", "Monaco", monospace;
+  font-size: 14px;
+  font-weight: 600;
+  width: 55px;
+  text-align: right;
+  background: transparent;
+  border: 1px solid var(--primary);
+  border-radius: 3px;
+  color: var(--text);
+  padding: 1px 4px;
+  outline: none;
 }
 
 .timer-paused .timer-time {

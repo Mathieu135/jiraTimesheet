@@ -44,12 +44,20 @@ export async function discardTimer(timerId) {
   return invoke("discard_timer", { timerId });
 }
 
+export async function setTimerElapsed(timerId, elapsedSeconds) {
+  return invoke("set_timer_elapsed", { timerId, elapsedSeconds });
+}
+
 export async function getHistory() {
   return invoke("get_history");
 }
 
 export async function getTimers() {
   return invoke("get_timers");
+}
+
+export async function getMyWorklogs(startDate, endDate) {
+  return invoke("get_my_worklogs", { startDate, endDate });
 }
 
 export async function getConfig() {

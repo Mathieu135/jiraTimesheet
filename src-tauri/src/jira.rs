@@ -1,4 +1,5 @@
 use base64::Engine;
+use chrono::NaiveDate;
 use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 
@@ -133,6 +134,66 @@ struct UserField {
 #[derive(Debug, Deserialize)]
 struct IssueTypeField {
     name: String,
+}
+
+// --- Worklog / Timesheet structs ---
+
+#[derive(Debug, Deserialize)]
+struct MyselfResponse {
+    #[serde(rename = "accountId")]
+    account_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct WorklogSearchResponse {
+    issues: Vec<WorklogIssue>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WorklogIssue {
+    key: String,
+    fields: WorklogIssueFields,
+}
+
+#[derive(Debug, Deserialize)]
+struct WorklogIssueFields {
+    summary: String,
+    worklog: Option<WorklogContainer>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WorklogContainer {
+    total: u32,
+    #[serde(rename = "maxResults")]
+    max_results: u32,
+    worklogs: Vec<WorklogEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WorklogEntry {
+    author: WorklogAuthor,
+    #[serde(rename = "timeSpentSeconds")]
+    time_spent_seconds: u64,
+    started: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WorklogAuthor {
+    #[serde(rename = "accountId")]
+    account_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct IssueWorklogResponse {
+    worklogs: Vec<WorklogEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimesheetEntry {
+    pub issue_key: String,
+    pub summary: String,
+    pub date: String,
+    pub time_spent_seconds: u64,
 }
 
 pub struct JiraClient {
@@ -360,6 +421,155 @@ impl JiraClient {
         })
     }
 
+    async fn get_myself(&self) -> Result<String, String> {
+        let url = format!("{}/rest/api/3/myself", self.base_url);
+
+        let response = self
+            .client
+            .get(&url)
+            .headers(self.headers())
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Jira API error {}: {}", status, body));
+        }
+
+        let myself: MyselfResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Parse error: {}", e))?;
+
+        Ok(myself.account_id)
+    }
+
+    async fn get_issue_worklogs(&self, issue_key: &str, started_after_ms: i64) -> Result<Vec<WorklogEntry>, String> {
+        let url = format!(
+            "{}/rest/api/3/issue/{}/worklog?startedAfter={}",
+            self.base_url, issue_key, started_after_ms
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .headers(self.headers())
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Jira API error {}: {}", status, body));
+        }
+
+        let result: IssueWorklogResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Parse error: {}", e))?;
+
+        Ok(result.worklogs)
+    }
+
+    pub async fn get_my_worklogs(&self, start_date: &str, end_date: &str) -> Result<Vec<TimesheetEntry>, String> {
+        let account_id = self.get_myself().await?;
+
+        let jql = format!(
+            "worklogAuthor=currentUser() AND worklogDate >= \"{}\" AND worklogDate <= \"{}\"",
+            start_date, end_date
+        );
+
+        // Paginate through search results
+        let mut all_issues: Vec<WorklogIssue> = Vec::new();
+        let mut start_at: u32 = 0;
+        let page_size: u32 = 100;
+
+        loop {
+            let url = format!(
+                "{}/rest/api/3/search?jql={}&fields=summary,worklog&maxResults={}&startAt={}",
+                self.base_url,
+                urlencoding::encode(&jql),
+                page_size,
+                start_at
+            );
+
+            let response = self
+                .client
+                .get(&url)
+                .headers(self.headers())
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {}", e))?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                return Err(format!("Jira API error {}: {}", status, body));
+            }
+
+            let search: WorklogSearchResponse = response
+                .json()
+                .await
+                .map_err(|e| format!("Parse error: {}", e))?;
+
+            let fetched = search.issues.len() as u32;
+            all_issues.extend(search.issues);
+
+            if fetched < page_size {
+                break;
+            }
+            start_at += page_size;
+        }
+
+        let start = NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
+            .map_err(|e| format!("Invalid start_date: {}", e))?;
+        let end = NaiveDate::parse_from_str(end_date, "%Y-%m-%d")
+            .map_err(|e| format!("Invalid end_date: {}", e))?;
+        let started_after_ms = start
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_utc()
+            .timestamp_millis();
+
+        let mut entries: Vec<TimesheetEntry> = Vec::new();
+
+        for issue in all_issues {
+            let worklogs = if let Some(ref container) = issue.fields.worklog {
+                if container.total > container.max_results {
+                    self.get_issue_worklogs(&issue.key, started_after_ms).await?
+                } else {
+                    container.worklogs.clone()
+                }
+            } else {
+                self.get_issue_worklogs(&issue.key, started_after_ms).await?
+            };
+
+            for worklog in worklogs {
+                if worklog.author.account_id != account_id {
+                    continue;
+                }
+                let date = extract_date_from_started(&worklog.started);
+                if let Ok(d) = NaiveDate::parse_from_str(&date, "%Y-%m-%d") {
+                    if d >= start && d <= end {
+                        entries.push(TimesheetEntry {
+                            issue_key: issue.key.clone(),
+                            summary: issue.fields.summary.clone(),
+                            date,
+                            time_spent_seconds: worklog.time_spent_seconds,
+                        });
+                    }
+                }
+            }
+        }
+
+        entries.sort_by(|a, b| a.date.cmp(&b.date).then(a.issue_key.cmp(&b.issue_key)));
+
+        Ok(entries)
+    }
+
     pub async fn log_worklog(&self, issue_key: &str, seconds: u64) -> Result<(), String> {
         let url = format!(
             "{}/rest/api/3/issue/{}/worklog",
@@ -387,6 +597,11 @@ impl JiraClient {
 
         Ok(())
     }
+}
+
+/// Extract "YYYY-MM-DD" from a Jira worklog `started` field (e.g. "2024-01-15T09:00:00.000+0000").
+fn extract_date_from_started(started: &str) -> String {
+    started.chars().take(10).collect()
 }
 
 /// Extract plain text from Jira's Atlassian Document Format (ADF) JSON.

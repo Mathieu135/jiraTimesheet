@@ -38,27 +38,51 @@
           <button id="settings-btn" class="btn-icon" title="Settings">&#9881;</button>
         </header>
 
-        <div id="projects-section">
-          <h3>Projects</h3>
-          <input type="text" id="projects-filter" class="filter-input" placeholder="Filter projects..." autocomplete="off" />
-          <div id="projects-list"></div>
+        <div id="tab-bar">
+          <button class="tab active" data-tab="projets">Projects</button>
+          <button class="tab" data-tab="timesheet">Timesheet</button>
         </div>
 
-        <div id="tickets-section" class="hidden">
-          <div class="tickets-header">
-            <button id="back-btn" class="btn-icon" title="Back">&larr;</button>
-            <h3 id="tickets-title"></h3>
+        <div id="tab-projets" class="tab-content">
+          <div id="projects-section">
+            <h3>Projects</h3>
+            <input type="text" id="projects-filter" class="filter-input" placeholder="Filter projects..." autocomplete="off" />
+            <div id="projects-list"></div>
           </div>
-          <input type="text" id="tickets-filter" class="filter-input" placeholder="Filter tickets..." autocomplete="off" />
-          <div id="tickets-list"></div>
+
+          <div id="tickets-section" class="hidden">
+            <div class="tickets-header">
+              <button id="back-btn" class="btn-icon" title="Back">&larr;</button>
+              <h3 id="tickets-title"></h3>
+            </div>
+            <input type="text" id="tickets-filter" class="filter-input" placeholder="Filter tickets..." autocomplete="off" />
+            <div id="tickets-list"></div>
+          </div>
+
+          <div id="ticket-detail-section" class="hidden">
+            <div class="tickets-header">
+              <button id="detail-back-btn" class="btn-icon" title="Back">&larr;</button>
+              <h3 id="detail-title"></h3>
+            </div>
+            <div id="ticket-detail-content"></div>
+          </div>
         </div>
 
-        <div id="ticket-detail-section" class="hidden">
-          <div class="tickets-header">
-            <button id="detail-back-btn" class="btn-icon" title="Back">&larr;</button>
-            <h3 id="detail-title"></h3>
+        <div id="tab-timesheet" class="tab-content hidden">
+          <div id="timesheet-section">
+            <div class="timesheet-header">
+              <div class="mode-toggle">
+                <button class="mode-btn active" data-mode="today">Today</button>
+                <button class="mode-btn" data-mode="week">Week</button>
+              </div>
+              <button id="timesheet-refresh" class="btn-icon" title="Refresh">&#8635;</button>
+            </div>
+            <div id="timesheet-total">
+              <span class="timesheet-total-label">Total</span>
+              <span class="timesheet-total-value" id="timesheet-total-value">0:00:00</span>
+            </div>
+            <div id="timesheet-content"></div>
           </div>
-          <div id="ticket-detail-content"></div>
         </div>
 
         <div id="timers-section">

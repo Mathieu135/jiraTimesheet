@@ -3,8 +3,8 @@ mod jira;
 mod timer;
 
 use config::{ConfigState, get_config, save_config};
-use jira::{JiraClient, JiraProject, JiraTicketDetail, JiraTransition};
-use timer::{HistoryEntry, TimerState, get_history, get_timers, pause_timer, resume_timer, start_timer, stop_timer};
+use jira::{JiraClient, JiraProject, JiraTicketDetail, JiraTransition, TimesheetEntry};
+use timer::{HistoryEntry, TimerState, get_history, get_timers, pause_timer, resume_timer, set_timer_elapsed, start_timer, stop_timer};
 
 use tauri::{
     Manager,
@@ -65,6 +65,16 @@ async fn transition_issue(
     client.transition_issue(&issue_key, &transition_id).await
 }
 
+#[tauri::command]
+async fn get_my_worklogs(
+    config_state: tauri::State<'_, ConfigState>,
+    start_date: String,
+    end_date: String,
+) -> Result<Vec<TimesheetEntry>, String> {
+    let client = build_client(&config_state)?;
+    client.get_my_worklogs(&start_date, &end_date).await
+}
+
 fn record_history(timer_state: &tauri::State<'_, TimerState>, timer: &timer::Timer, logged: bool) {
     if let Ok(mut history) = timer_state.history.lock() {
         history.push(HistoryEntry {
@@ -121,10 +131,12 @@ pub fn run() {
             get_issue_detail,
             get_transitions,
             transition_issue,
+            get_my_worklogs,
             start_timer,
             pause_timer,
             resume_timer,
             stop_timer,
+            set_timer_elapsed,
             discard_timer,
             get_timers,
             get_history,
