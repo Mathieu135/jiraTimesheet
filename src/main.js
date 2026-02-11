@@ -1,6 +1,7 @@
 import {
   listProjects,
   searchTickets,
+  getIssueDetail,
   getTransitions,
   transitionIssue,
   startTimer,
@@ -27,6 +28,10 @@ const ticketsList = document.getElementById("tickets-list");
 const backBtn = document.getElementById("back-btn");
 const projectsFilter = document.getElementById("projects-filter");
 const ticketsFilter = document.getElementById("tickets-filter");
+const ticketDetailSection = document.getElementById("ticket-detail-section");
+const detailTitle = document.getElementById("detail-title");
+const detailContent = document.getElementById("ticket-detail-content");
+const detailBackBtn = document.getElementById("detail-back-btn");
 const timersList = document.getElementById("timers-list");
 
 let refreshInterval = null;
@@ -177,7 +182,7 @@ function renderTickets(tickets) {
     .map(
       (t) => `
     <div class="ticket-row">
-      <div class="ticket-info">
+      <div class="ticket-info" data-action="show-detail" data-key="${escapeHtml(t.key)}">
         <span class="ticket-key">${escapeHtml(t.key)}</span>
         <span class="ticket-summary">${escapeHtml(t.summary)}</span>
       </div>
@@ -206,6 +211,12 @@ ticketsList.addEventListener("click", async (e) => {
   const statusBtn = e.target.closest("[data-action='change-status']");
   if (statusBtn) {
     await showTransitionMenu(statusBtn);
+    return;
+  }
+
+  const infoEl = e.target.closest("[data-action='show-detail']");
+  if (infoEl) {
+    await showTicketDetail(infoEl.dataset.key);
   }
 });
 
@@ -274,6 +285,109 @@ function closeTransitionMenu() {
   const existing = document.querySelector(".transition-menu");
   if (existing) existing.remove();
 }
+
+// --- Ticket detail ---
+
+async function showTicketDetail(issueKey) {
+  ticketsSection.classList.add("hidden");
+  ticketDetailSection.classList.remove("hidden");
+  detailTitle.textContent = issueKey;
+  detailContent.innerHTML = '<div class="loading">Loading details...</div>';
+
+  try {
+    const detail = await getIssueDetail(issueKey);
+    renderTicketDetail(detail);
+  } catch (err) {
+    detailContent.innerHTML = `<div class="empty-state">Error: ${escapeHtml(String(err))}</div>`;
+  }
+}
+
+function formatDate(isoString) {
+  if (!isoString) return "—";
+  const d = new Date(isoString);
+  return d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function renderTicketDetail(detail) {
+  const hasTimeTracking =
+    detail.time_spent_seconds > 0 ||
+    detail.time_estimate_seconds > 0 ||
+    detail.time_remaining_seconds > 0;
+
+  detailContent.innerHTML = `
+    <div class="detail-meta">
+      <div class="detail-meta-row">
+        <span class="detail-label">Type</span>
+        <span class="detail-value">${escapeHtml(detail.issue_type || "—")}</span>
+      </div>
+      <div class="detail-meta-row">
+        <span class="detail-label">Status</span>
+        <span class="detail-value detail-status">${escapeHtml(detail.status)}</span>
+      </div>
+      <div class="detail-meta-row">
+        <span class="detail-label">Priority</span>
+        <span class="detail-value">${escapeHtml(detail.priority || "—")}</span>
+      </div>
+      <div class="detail-meta-row">
+        <span class="detail-label">Assignee</span>
+        <span class="detail-value">${escapeHtml(detail.assignee || "—")}</span>
+      </div>
+      <div class="detail-meta-row">
+        <span class="detail-label">Reporter</span>
+        <span class="detail-value">${escapeHtml(detail.reporter || "—")}</span>
+      </div>
+      ${detail.labels.length > 0 ? `
+      <div class="detail-meta-row">
+        <span class="detail-label">Labels</span>
+        <span class="detail-value">${detail.labels.map((l) => `<span class="detail-label-tag">${escapeHtml(l)}</span>`).join(" ")}</span>
+      </div>` : ""}
+      <div class="detail-meta-row">
+        <span class="detail-label">Created</span>
+        <span class="detail-value">${formatDate(detail.created)}</span>
+      </div>
+      <div class="detail-meta-row">
+        <span class="detail-label">Updated</span>
+        <span class="detail-value">${formatDate(detail.updated)}</span>
+      </div>
+      ${hasTimeTracking ? `
+      <div class="detail-meta-row">
+        <span class="detail-label">Time</span>
+        <span class="detail-value detail-time">
+          ${detail.time_spent_seconds > 0 ? `<span title="Logged">${formatTime(detail.time_spent_seconds)} logged</span>` : ""}
+          ${detail.time_estimate_seconds > 0 ? `<span title="Estimate">${formatTime(detail.time_estimate_seconds)} estimated</span>` : ""}
+          ${detail.time_remaining_seconds > 0 ? `<span title="Remaining">${formatTime(detail.time_remaining_seconds)} remaining</span>` : ""}
+        </span>
+      </div>` : ""}
+    </div>
+    <div class="detail-summary">${escapeHtml(detail.summary)}</div>
+    ${detail.description ? `<div class="detail-description">${escapeHtml(detail.description)}</div>` : ""}
+    <div class="detail-actions">
+      <button class="btn btn-primary btn-sm" id="detail-start-btn" data-key="${escapeHtml(detail.key)}" data-summary="${escapeHtml(detail.summary)}">Start Timer</button>
+    </div>
+  `;
+
+  const startBtn = document.getElementById("detail-start-btn");
+  startBtn.addEventListener("click", async () => {
+    try {
+      await startTimer(startBtn.dataset.key, startBtn.dataset.summary);
+      showToast(`Timer started for ${startBtn.dataset.key}`, "success");
+      await refreshTimers();
+    } catch (err) {
+      showToast(err, "error");
+    }
+  });
+}
+
+detailBackBtn.addEventListener("click", () => {
+  ticketDetailSection.classList.add("hidden");
+  ticketsSection.classList.remove("hidden");
+});
 
 // --- Back button ---
 

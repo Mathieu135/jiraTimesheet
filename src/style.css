@@ -192,6 +192,15 @@ header h1 {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background 0.15s;
+}
+
+.ticket-info:hover {
+  background: var(--surface-hover);
 }
 
 .ticket-key {
@@ -258,6 +267,111 @@ header h1 {
 .transition-option:hover {
   background: var(--surface-hover);
   color: var(--primary);
+}
+
+/* Ticket detail section */
+#ticket-detail-section {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+#ticket-detail-section h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 0;
+}
+
+#ticket-detail-content {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 2px;
+}
+
+.detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.detail-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.detail-label {
+  color: var(--text-muted);
+  min-width: 70px;
+  font-size: 11px;
+}
+
+.detail-value {
+  color: var(--text);
+  flex: 1;
+}
+
+.detail-status {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.detail-label-tag {
+  display: inline-block;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.detail-time {
+  display: flex;
+  gap: 10px;
+  font-family: "SF Mono", "Consolas", "Monaco", monospace;
+  font-size: 11px;
+  color: var(--success);
+}
+
+.detail-summary {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 0 2px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.detail-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.detail-actions {
+  padding: 4px 0;
 }
 
 .btn-sm {

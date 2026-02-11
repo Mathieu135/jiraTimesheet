@@ -3,7 +3,7 @@ mod jira;
 mod timer;
 
 use config::{ConfigState, get_config, save_config};
-use jira::{JiraClient, JiraProject, JiraTransition};
+use jira::{JiraClient, JiraProject, JiraTicketDetail, JiraTransition};
 use timer::{HistoryEntry, TimerState, get_history, get_timers, pause_timer, resume_timer, start_timer, stop_timer};
 
 use tauri::{
@@ -35,6 +35,15 @@ async fn search_tickets(
 ) -> Result<Vec<jira::JiraTicket>, String> {
     let client = build_client(&config_state)?;
     client.search_project_tickets(&project_key).await
+}
+
+#[tauri::command]
+async fn get_issue_detail(
+    config_state: tauri::State<'_, ConfigState>,
+    issue_key: String,
+) -> Result<JiraTicketDetail, String> {
+    let client = build_client(&config_state)?;
+    client.get_issue_detail(&issue_key).await
 }
 
 #[tauri::command]
@@ -109,6 +118,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_projects,
             search_tickets,
+            get_issue_detail,
             get_transitions,
             transition_issue,
             start_timer,

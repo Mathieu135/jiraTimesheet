@@ -8,6 +8,10 @@ export async function searchTickets(projectKey) {
   return invoke("search_tickets", { projectKey });
 }
 
+export async function getIssueDetail(issueKey) {
+  return invoke("get_issue_detail", { issueKey });
+}
+
 export async function getTransitions(issueKey) {
   return invoke("get_transitions", { issueKey });
 }
