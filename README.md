@@ -6,16 +6,19 @@ App desktop pour tracker le temps sur les tickets Jira et logger les worklogs au
 
 - **Backend** : Rust + Tauri v2
 - **Frontend** : Vanilla JS + Vite
-- **UI** : Fenetre frameless, dark theme, system tray
+- **UI** : Dark theme, decorations natives Windows, system tray
 
 ## Fonctionnalites
 
-- Listing des projets Jira avec filtre de recherche
-- Tickets par projet (lazy load) avec temps deja logge
+- Listing des projets Jira avec filtre de recherche instantane
+- Tickets par projet (lazy load) avec temps deja logge affiche
+- Changement de statut des tickets (transitions Jira)
 - Timers : start / pause / resume / discard / log to Jira
 - Confirmation avant discard d'un timer
+- Sections redimensionnables (projets, tickets, timers)
 - Raccourci global `Ctrl+Shift+T` pour afficher/masquer la fenetre
 - System tray avec menu Show/Quit
+- Config via `.env` (persistee entre les lancements)
 
 ## Prerequis
 
@@ -52,13 +55,13 @@ Premier build long (compilation Rust), les suivants sont caches grace aux volume
 .
 ├── index.html                  # HTML principal
 ├── src/
-│   ├── main.js                 # Logique frontend (navigation, timers)
+│   ├── main.js                 # Logique frontend (navigation, filtres, timers)
 │   ├── jira.js                 # Wrapper invoke() commandes Tauri
 │   └── style.css               # Theme dark, CSS variables
 ├── src-tauri/
 │   ├── src/
 │   │   ├── lib.rs              # Commandes Tauri (orchestrateur)
-│   │   ├── jira.rs             # Client HTTP Jira
+│   │   ├── jira.rs             # Client HTTP Jira (projets, tickets, transitions, worklogs)
 │   │   ├── timer.rs            # Gestion timers en memoire
 │   │   └── config.rs           # Config via env vars
 │   ├── Cargo.toml
@@ -70,6 +73,10 @@ Premier build long (compilation Rust), les suivants sont caches grace aux volume
 
 ## API Jira utilisees
 
-- `GET /rest/api/3/project/search` — Liste des projets
-- `GET /rest/api/3/search/jql` — Recherche tickets par projet
-- `POST /rest/api/3/issue/{key}/worklog` — Logger du temps
+| Endpoint | Methode | Usage |
+|----------|---------|-------|
+| `/rest/api/3/project/search` | GET | Liste des projets |
+| `/rest/api/3/search/jql` | GET | Recherche tickets par projet (avec timetracking) |
+| `/rest/api/3/issue/{key}/transitions` | GET | Transitions disponibles pour un ticket |
+| `/rest/api/3/issue/{key}/transitions` | POST | Appliquer une transition (changer le statut) |
+| `/rest/api/3/issue/{key}/worklog` | POST | Logger du temps |

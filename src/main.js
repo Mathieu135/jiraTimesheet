@@ -1,6 +1,8 @@
 import {
   listProjects,
   searchTickets,
+  getTransitions,
+  transitionIssue,
   startTimer,
   pauseTimer,
   resumeTimer,
@@ -180,7 +182,7 @@ function renderTickets(tickets) {
         <span class="ticket-summary">${escapeHtml(t.summary)}</span>
       </div>
       ${t.time_spent_seconds > 0 ? `<span class="ticket-logged-time" title="Time logged">${formatTime(t.time_spent_seconds)}</span>` : ""}
-      <span class="ticket-status">${escapeHtml(t.status)}</span>
+      <button class="ticket-status" data-action="change-status" data-key="${escapeHtml(t.key)}" title="Change status">${escapeHtml(t.status)}</button>
       <button class="btn btn-primary btn-sm" data-action="start-ticket" data-key="${escapeHtml(t.key)}" data-summary="${escapeHtml(t.summary)}">Start</button>
     </div>
   `
@@ -189,20 +191,89 @@ function renderTickets(tickets) {
 }
 
 ticketsList.addEventListener("click", async (e) => {
-  const btn = e.target.closest("[data-action='start-ticket']");
-  if (!btn) return;
+  const startBtn = e.target.closest("[data-action='start-ticket']");
+  if (startBtn) {
+    try {
+      await startTimer(startBtn.dataset.key, startBtn.dataset.summary);
+      showToast(`Timer started for ${startBtn.dataset.key}`, "success");
+      await refreshTimers();
+    } catch (err) {
+      showToast(err, "error");
+    }
+    return;
+  }
 
-  const key = btn.dataset.key;
-  const summary = btn.dataset.summary;
+  const statusBtn = e.target.closest("[data-action='change-status']");
+  if (statusBtn) {
+    await showTransitionMenu(statusBtn);
+  }
+});
+
+async function showTransitionMenu(anchor) {
+  closeTransitionMenu();
+  const issueKey = anchor.dataset.key;
 
   try {
-    await startTimer(key, summary);
-    showToast(`Timer started for ${key}`, "success");
-    await refreshTimers();
+    const transitions = await getTransitions(issueKey);
+    if (transitions.length === 0) {
+      showToast("No transitions available", "error");
+      return;
+    }
+
+    const menu = document.createElement("div");
+    menu.className = "transition-menu";
+    menu.innerHTML = transitions
+      .map(
+        (t) =>
+          `<button class="transition-option" data-tid="${escapeHtml(t.id)}">${escapeHtml(t.name)}</button>`
+      )
+      .join("");
+
+    const rect = anchor.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + 4}px`;
+    menu.style.left = `${rect.left}px`;
+
+    menu.addEventListener("click", async (e) => {
+      const opt = e.target.closest(".transition-option");
+      if (!opt) return;
+      closeTransitionMenu();
+      try {
+        await transitionIssue(issueKey, opt.dataset.tid);
+        showToast(`Status updated`, "success");
+        const ticket = cachedTickets.find((t) => t.key === issueKey);
+        if (ticket) {
+          ticket.status = opt.textContent;
+        }
+        renderTickets(
+          ticketsFilter.value
+            ? cachedTickets.filter((t) => {
+                const q = ticketsFilter.value.toLowerCase();
+                return (
+                  t.key.toLowerCase().includes(q) ||
+                  t.summary.toLowerCase().includes(q) ||
+                  t.status.toLowerCase().includes(q)
+                );
+              })
+            : cachedTickets
+        );
+      } catch (err) {
+        showToast(err, "error");
+      }
+    });
+
+    document.body.appendChild(menu);
+    setTimeout(() => {
+      document.addEventListener("click", closeTransitionMenu, { once: true });
+    }, 0);
   } catch (err) {
     showToast(err, "error");
   }
-});
+}
+
+function closeTransitionMenu() {
+  const existing = document.querySelector(".transition-menu");
+  if (existing) existing.remove();
+}
 
 // --- Back button ---
 

@@ -57,6 +57,23 @@ struct StatusField {
     name: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JiraTransition {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TransitionsResponse {
+    transitions: Vec<TransitionValue>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TransitionValue {
+    id: String,
+    name: String,
+}
+
 pub struct JiraClient {
     client: reqwest::Client,
     base_url: String,
@@ -164,6 +181,71 @@ impl JiraClient {
             .collect();
 
         Ok(tickets)
+    }
+
+    pub async fn get_transitions(&self, issue_key: &str) -> Result<Vec<JiraTransition>, String> {
+        let url = format!(
+            "{}/rest/api/3/issue/{}/transitions",
+            self.base_url, issue_key
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .headers(self.headers())
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Jira API error {}: {}", status, body));
+        }
+
+        let result: TransitionsResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Parse error: {}", e))?;
+
+        let transitions = result
+            .transitions
+            .into_iter()
+            .map(|t| JiraTransition {
+                id: t.id,
+                name: t.name,
+            })
+            .collect();
+
+        Ok(transitions)
+    }
+
+    pub async fn transition_issue(&self, issue_key: &str, transition_id: &str) -> Result<(), String> {
+        let url = format!(
+            "{}/rest/api/3/issue/{}/transitions",
+            self.base_url, issue_key
+        );
+
+        let body = serde_json::json!({
+            "transition": { "id": transition_id }
+        });
+
+        let response = self
+            .client
+            .post(&url)
+            .headers(self.headers())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Transition error {}: {}", status, body));
+        }
+
+        Ok(())
     }
 
     pub async fn log_worklog(&self, issue_key: &str, seconds: u64) -> Result<(), String> {
