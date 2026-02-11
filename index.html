@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jira Timesheet</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Settings panel -->
+      <div id="settings-panel" class="panel hidden">
+        <h2>Settings</h2>
+        <form id="settings-form">
+          <label>
+            Jira URL
+            <input type="url" id="jira-url" placeholder="https://your-domain.atlassian.net" required />
+          </label>
+          <label>
+            Email
+            <input type="email" id="jira-email" placeholder="you@example.com" required />
+          </label>
+          <label>
+            API Token
+            <input type="password" id="jira-token" placeholder="Your Jira API token" required />
+          </label>
+          <div class="btn-row">
+            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="button" id="settings-cancel" class="btn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Main panel -->
+      <div id="main-panel" class="panel">
+        <header data-tauri-drag-region>
+          <h1>Jira Timesheet</h1>
+          <button id="settings-btn" class="btn-icon" title="Settings">&#9881;</button>
+        </header>
+
+        <div id="projects-section">
+          <h3>Projects</h3>
+          <input type="text" id="projects-filter" class="filter-input" placeholder="Filter projects..." autocomplete="off" />
+          <div id="projects-list"></div>
+        </div>
+
+        <div id="tickets-section" class="hidden">
+          <div class="tickets-header">
+            <button id="back-btn" class="btn-icon" title="Back">&larr;</button>
+            <h3 id="tickets-title"></h3>
+          </div>
+          <input type="text" id="tickets-filter" class="filter-input" placeholder="Filter tickets..." autocomplete="off" />
+          <div id="tickets-list"></div>
+        </div>
+
+        <div id="timers-section">
+          <h3>Active Timers</h3>
+          <div id="timers-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
